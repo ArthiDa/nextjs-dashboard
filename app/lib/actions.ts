@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
+import conn from './db';
 
 const FormSchema = z.object({
   id: z.string(),
@@ -70,15 +71,19 @@ export async function createInvoice(prevState: State, formData: FormData) {
   const amountInCents = amount * 100;
   const date = new Date().toISOString().split('T')[0];
 
+  const client = await conn.connect();
+
   try {
-    await sql`
-    INSERT INTO invoices (customer_id, amount, status, date)
-    VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
-  `;
+    await client.query(
+      `INSERT INTO invoices (customer_id, amount, status, date)
+      VALUES ('${customerId}', ${amountInCents}, '${status}', '${date}')`,
+    );
   } catch (error) {
     return {
       message: 'An error occurred while creating the invoice',
     };
+  } finally {
+    client.release();
   }
 
   revalidatePath('/dashboard/invoices');
@@ -107,16 +112,21 @@ export async function updateInvoice(
 
   const { customerId, amount, status } = validatedFields.data;
   const amountInCents = amount * 100;
+
+  const client = await conn.connect();
+
   try {
-    await sql`
-      UPDATE invoices
-      SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
-      WHERE id = ${id}
-    `;
+    await client.query(
+      `UPDATE invoices
+      SET customer_id = '${customerId}', amount = ${amountInCents}, status = '${status}'
+      WHERE id = '${id}'`,
+    );
   } catch (error) {
     return {
       message: 'An error occurred while updating the invoice',
     };
+  } finally {
+    client.release();
   }
 
   revalidatePath('/dashboard/invoices');
@@ -126,15 +136,16 @@ export async function updateInvoice(
 export async function deleteInvoice(id: string) {
   //   throw new Error('Failed to Delete Invoice');
 
+  const client = await conn.connect();
+
   try {
-    await sql`
-      DELETE FROM invoices
-      WHERE id = ${id}
-    `;
+    await client.query(`DELETE FROM invoices WHERE id = '${id}'`);
   } catch (error) {
     return {
       message: 'An error occurred while deleting the invoice',
     };
+  } finally {
+    client.release();
   }
   revalidatePath('/dashboard/invoices');
 }
